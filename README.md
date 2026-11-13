@@ -85,10 +85,7 @@ dashboard is available at the URL printed by Vite.
 
 From the Rank Ledger repository root, use the supplied integration overlay:
 
-    docker compose \
-      -f compose.yaml \
-      -f make-duel-go-brrr/compose.integration.yml \
-      up --build
+    docker compose -f compose.yaml -f make-duel-go-brrr/compose.integration.yml up --build
 
 The overlay sets the demo webhook target to the Node gateway. It is meant for a
 fresh local demo database; it does not alter a production Rank Ledger deployment.
@@ -118,8 +115,9 @@ The detailed request, replay, and signature rules live in
   for the demonstration.
 - No WebSocket broker or message bus: SSE is enough for one operator dashboard.
 - No automatic compensation when one of two score events fails: the UI identifies
-  whether a transient failure can safely retry the same receipt or whether the
-  operator needs to correct the input and start a new receipt.
+  whether a transient failure can safely retry the same receipt. A permanent
+  partial result stays locked for manual resolution; the dashboard never creates
+  a new receipt automatically.
 
 Those choices are deliberate applications of KISS and YAGNI, not missing
 features. See [docs/principles.md](docs/principles.md).
@@ -131,7 +129,6 @@ features. See [docs/principles.md](docs/principles.md).
 - [Rank Ledger integration contract](docs/integration.md)
 - [Security notes](docs/security.md)
 - [Engineering principles](docs/principles.md)
-- [Work log](docs/worklog.md)
 
 ## License
 

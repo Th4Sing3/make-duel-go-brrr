@@ -65,7 +65,7 @@ platform. They also keep the integration boundary easy to inspect.
 | A double click or network retry inflates a score | Derive stable event IDs and idempotency keys from match_id and outcome; preserve the receipt timestamp on retry. |
 | Browser code leaks a service credential | Keep Rank Ledger calls in the Node gateway only. |
 | A forged webhook changes the visible result | Verify timestamp, HMAC, and comparison timing before broadcasting. |
-| One event succeeds and the second fails | Return a partial state; retry the same stable receipt only for transient failures, otherwise require an explicit corrected receipt. |
+| One event succeeds and the second fails | Return a partial state; retry the same stable receipt only for transient failures, otherwise lock the receipt for manual resolution. |
 | The project grows into a fake game platform | Maintain the exclusions above and one narrow operating workflow. |
 | A local in-memory SSE broker is mistaken for production infrastructure | Document it as a single-instance demo seam, not a scalable event system. |
 

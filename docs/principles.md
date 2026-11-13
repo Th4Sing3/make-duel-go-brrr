@@ -45,5 +45,6 @@ existing seams make that change local.
 The most important choice is keeping Rank Ledger authoritative. The dashboard
 does not duplicate ranking state or invent its own notion of a successful match.
 When an external operation is only partially complete, the UI states that fact
-and distinguishes a retryable transport failure from an input conflict that needs
-a new receipt. Clear truthfulness beats a superficially smoother demo.
+and distinguishes a retryable transport failure from an input conflict that
+requires manual resolution. Clear truthfulness beats a superficially smoother
+demo.

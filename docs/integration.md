@@ -77,7 +77,8 @@ unlocks the form for correction.
 The `matchId` and `occurredAt` must be stable. A retry sends the same event IDs,
 idempotency keys, points, participants, timestamp, and metadata. Changing one of
 those fields while reusing a match ID is a conflict, not a correction. A
-correction deserves a new match ID and an explicit compensating score event.
+correction after a partial result is a manual operation outside the dashboard,
+not an automatic retry path.
 
 When only one of the two score events is accepted, the gateway labels the result
 `partial`. Network failures, timeouts, 408s, 429s, and 5xx responses are

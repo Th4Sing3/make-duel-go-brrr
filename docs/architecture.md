@@ -61,8 +61,9 @@ There is no cross-service transaction. If the winner call succeeds and the loser
 call fails, the gateway reports that partial state. For a network, timeout, or
 retryable upstream failure, retrying the same stable receipt replays the completed
 winner event and completes the missing loser event. A conflicting 4xx result is
-not retried blindly; it needs an explicit correction and a new receipt. That is
-more honest than pretending a distributed transaction exists.
+not retried blindly; the dashboard locks that receipt for manual resolution and
+does not create a new receipt automatically. That is more honest than pretending
+a distributed transaction exists.
 
 The dashboard stores an unresolved receipt in browser session storage before the
 network call. A refresh can therefore recover the exact `matchId` and
@@ -94,7 +95,7 @@ HTTP-only; neither service mounts or shares the other's database volume.
 | --- | --- |
 | Invalid match input | Return 422 before contacting Rank Ledger. |
 | Rank Ledger rejects an event | Return a clear integration error with no fabricated local success. |
-| One of the two events succeeds | Mark a transient failure as retryable with the same stable receipt; surface 4xx conflicts as operator attention requiring a new receipt. |
+| One of the two events succeeds | Mark a transient failure as retryable with the same stable receipt; lock a 4xx conflict for manual resolution. |
 | Webhook HMAC invalid or stale | Return 401; do not publish SSE. |
 | Leaderboard read fails | Preserve the last rendered snapshot and surface a retryable error. |
 
