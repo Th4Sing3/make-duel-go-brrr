@@ -1,0 +1,17 @@
+services:
+  make-duel-go-brrr:
+    build:
+      context: .
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3000
+      # On Docker Desktop for Windows, this reaches the Rank Ledger API started on the host.
+      RANK_LEDGER_BASE_URL: ${RANK_LEDGER_BASE_URL:-http://host.docker.internal:8080}
+      RANK_LEDGER_API_KEY: ${RANK_LEDGER_API_KEY:-local-demo-key-change-me}
+      RANK_LEDGER_REQUEST_TIMEOUT_MS: ${RANK_LEDGER_REQUEST_TIMEOUT_MS:-5000}
+      RANK_LEDGER_WEBHOOK_SECRET: ${RANK_LEDGER_WEBHOOK_SECRET:-local-development-webhook-secret}
+      RANK_LEDGER_WEBHOOK_TOLERANCE_SECONDS: ${RANK_LEDGER_WEBHOOK_TOLERANCE_SECONDS:-300}
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    ports:
+      - "127.0.0.1:3000:3000"

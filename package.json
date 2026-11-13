@@ -1,0 +1,35 @@
+{
+  "name": "make-duel-go-brrr",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A small Vue and Node match-operations console that consumes Rank Ledger.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "dev": "concurrently --kill-others-on-fail --names server,client --prefix-colors cyan,magenta \"npm:dev:server\" \"npm:dev:client\"",
+    "dev:server": "node --env-file-if-exists=.env --import tsx --watch src/server/index.ts",
+    "dev:client": "vite",
+    "build": "npm run build:client && npm run build:server",
+    "build:client": "vite build",
+    "build:server": "tsc --project tsconfig.server.json",
+    "check": "npm run check:client && npm run check:server",
+    "check:client": "vue-tsc --noEmit --project tsconfig.client.json",
+    "check:server": "tsc --noEmit --project tsconfig.server.json",
+    "test": "npm run build:server && node --test dist/tests/**/*.test.js",
+    "start": "node --env-file-if-exists=.env dist/src/server/index.js"
+  },
+  "dependencies": {
+    "vue": "^3.5.13"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@vitejs/plugin-vue": "^5.2.1",
+    "concurrently": "^10.0.7",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.1",
+    "vue-tsc": "^3.3.14"
+  }
+}

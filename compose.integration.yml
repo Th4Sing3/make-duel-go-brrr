@@ -1,0 +1,35 @@
+# Compose overlay for a local checkout laid out as:
+#
+#   rank-ledger/
+#   └── make-duel-go-brrr/
+#
+# Run from the Rank Ledger root:
+# docker compose -f compose.yaml -f make-duel-go-brrr/compose.integration.yml up --build
+#
+# This only changes the local demo webhook target. It never shares a database
+# or mounts either repository into the other container.
+services:
+  migrate:
+    environment:
+      DEMO_WEBHOOK_URL: http://make-duel-go-brrr:3000/api/webhooks/rank-ledger
+      DEMO_WEBHOOK_SECRET: ${DEMO_WEBHOOK_SECRET:-local-development-webhook-secret}
+
+  make-duel-go-brrr:
+    build:
+      context: ./make-duel-go-brrr
+    environment:
+      HOST: 0.0.0.0
+      PORT: '3000'
+      RANK_LEDGER_BASE_URL: http://app:8000
+      RANK_LEDGER_API_KEY: ${DEMO_API_KEY:-local-demo-key-change-me}
+      RANK_LEDGER_REQUEST_TIMEOUT_MS: ${RANK_LEDGER_REQUEST_TIMEOUT_MS:-5000}
+      RANK_LEDGER_WEBHOOK_SECRET: ${DEMO_WEBHOOK_SECRET:-local-development-webhook-secret}
+      RANK_LEDGER_WEBHOOK_TOLERANCE_SECONDS: ${WEBHOOK_SIGNATURE_TOLERANCE_SECONDS:-300}
+    depends_on:
+      app:
+        condition: service_started
+    ports:
+      - '127.0.0.1:3000:3000'
+    restart: unless-stopped
+    networks:
+      - rank-ledger
