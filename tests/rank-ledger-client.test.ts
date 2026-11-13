@@ -27,7 +27,19 @@ test('turns an elapsed request timeout into a distinct upstream timeout', async 
     apiKey: 'test-key',
     requestTimeoutMs: 1,
     fetchImplementation: async (_input, init) => new Promise<Response>((_resolve, reject) => {
-      init?.signal?.addEventListener('abort', () => reject(init.signal?.reason), { once: true });
+      const watchdog = setTimeout(() => {
+        reject(new Error('Expected the request timeout to abort the fetch.'));
+      }, 200);
+      const onAbort = () => {
+        clearTimeout(watchdog);
+        reject(init?.signal?.reason);
+      };
+
+      if (init?.signal?.aborted) {
+        onAbort();
+      } else {
+        init?.signal?.addEventListener('abort', onAbort, { once: true });
+      }
     }),
   });
 
