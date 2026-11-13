@@ -7,6 +7,13 @@ import type { ActivityItem, LeaderboardSnapshot, MatchSubmission } from './types
 const leaderboardId = 'daily-demo';
 const pendingReceiptStorageKey = 'make-duel-go-brrr.pending-receipt';
 
+type ReceiptResolution = 'manual' | 'retry';
+
+type PendingReceipt = {
+  resolution: ReceiptResolution;
+  submission: MatchSubmission;
+};
+
 function createMatchReceipt(): MatchSubmission {
   return {
     leaderboardId,
@@ -30,7 +37,17 @@ function isMatchReceipt(value: unknown): value is MatchSubmission {
     && typeof receipt.winnerId === 'string';
 }
 
-function readPendingReceipt(): MatchSubmission | null {
+function isPendingReceipt(value: unknown): value is PendingReceipt {
+  if (value === null || typeof value !== 'object') {
+    return false;
+  }
+
+  const receipt = value as Record<string, unknown>;
+  return (receipt.resolution === 'manual' || receipt.resolution === 'retry')
+    && isMatchReceipt(receipt.submission);
+}
+
+function readPendingReceipt(): PendingReceipt | null {
   try {
     const raw = sessionStorage.getItem(pendingReceiptStorageKey);
     if (raw === null) {
@@ -38,13 +55,19 @@ function readPendingReceipt(): MatchSubmission | null {
     }
 
     const parsed: unknown = JSON.parse(raw);
-    return isMatchReceipt(parsed) ? parsed : null;
+    if (isPendingReceipt(parsed)) {
+      return parsed;
+    }
+
+    // Receipts stored by an earlier dashboard version did not record whether
+    // they were safe to retry, so restore them with the conservative lock.
+    return isMatchReceipt(parsed) ? { resolution: 'manual', submission: parsed } : null;
   } catch {
     return null;
   }
 }
 
-function savePendingReceipt(receipt: MatchSubmission): void {
+function savePendingReceipt(receipt: PendingReceipt): void {
   try {
     sessionStorage.setItem(pendingReceiptStorageKey, JSON.stringify(receipt));
   } catch {
@@ -61,7 +84,7 @@ function clearPendingReceipt(): void {
 }
 
 function releasePendingReceipt(): void {
-  pendingRetry.value = null;
+  pendingReceipt.value = null;
   clearPendingReceipt();
 }
 
@@ -86,8 +109,8 @@ const isSubmitting = ref(false);
 const isLive = ref(false);
 const errorMessage = ref('');
 const successMessage = ref('');
-const pendingRetry = ref<MatchSubmission | null>(restoredReceipt);
-const form = ref<MatchSubmission>(restoredReceipt ?? createMatchReceipt());
+const pendingReceipt = ref<PendingReceipt | null>(restoredReceipt);
+const form = ref<MatchSubmission>(restoredReceipt?.submission ?? createMatchReceipt());
 const activity = ref<ActivityItem[]>([
   {
     detail: 'Listening for signed Rank Ledger deliveries.',
@@ -101,7 +124,8 @@ const activity = ref<ActivityItem[]>([
 const topScore = computed(() => snapshot.value.entries[0]?.score ?? 0);
 const currentLeader = computed(() => snapshot.value.entries[0]?.participantId ?? 'Waiting for first score');
 const totalEvents = computed(() => snapshot.value.entries.reduce((total, entry) => total + entry.eventCount, 0));
-const isRetryLocked = computed(() => pendingRetry.value !== null);
+const isRetryLocked = computed(() => pendingReceipt.value !== null);
+const requiresManualResolution = computed(() => pendingReceipt.value?.resolution === 'manual');
 const deliveredEventIds = new Set<string>();
 const deliveredEventOrder: string[] = [];
 
@@ -158,12 +182,11 @@ async function loadLeaderboard(silent = false): Promise<void> {
   }
 }
 
-function newMatchId(force = false): void {
-  if (isRetryLocked.value && !force) {
+function newMatchId(): void {
+  if (isRetryLocked.value) {
     return;
   }
 
-  releasePendingReceipt();
   form.value = {
     ...form.value,
     matchId: `duel_${crypto.randomUUID().slice(0, 8)}`,
@@ -175,13 +198,18 @@ async function recordMatch(): Promise<void> {
   errorMessage.value = '';
   successMessage.value = '';
 
+  if (requiresManualResolution.value) {
+    errorMessage.value = 'This partial receipt requires manual resolution. Do not resend it or create a new match ID.';
+    return;
+  }
+
   if (form.value.winnerId.trim() === form.value.loserId.trim()) {
     errorMessage.value = 'A player cannot duel themselves.';
     return;
   }
 
   isSubmitting.value = true;
-  const submission = pendingRetry.value ?? {
+  const submission = pendingReceipt.value?.submission ?? {
     ...form.value,
     loserId: form.value.loserId.trim(),
     matchId: form.value.matchId.trim(),
@@ -189,8 +217,9 @@ async function recordMatch(): Promise<void> {
   };
   form.value = submission;
   // Persist before the network call: a lost response can still represent a committed event.
-  savePendingReceipt(submission);
-  pendingRetry.value = submission;
+  const retryReceipt: PendingReceipt = { resolution: 'retry', submission };
+  savePendingReceipt(retryReceipt);
+  pendingReceipt.value = retryReceipt;
 
   try {
     const result = await submitMatch(submission);
@@ -198,18 +227,20 @@ async function recordMatch(): Promise<void> {
       const retryable = result.retryable === true;
       successMessage.value = result.message ?? (retryable
         ? 'One score was recorded. Retry this exact match ID to finish safely.'
-        : 'One score was recorded, but the remaining input needs correction.');
+        : 'One score was recorded, but the remaining event was rejected. Manual resolution is required.');
       addActivity({
         detail: retryable
           ? `Match ${form.value.matchId} is only partially recorded. Keep the same receipt ID when retrying.`
-          : `Match ${form.value.matchId} is partially recorded. Correct the remaining input and use a new receipt ID.`,
+          : `Match ${form.value.matchId} is partially recorded and locked for manual resolution.`,
         id: `partial-${form.value.matchId}-${Date.now()}`,
         kind: 'notice',
         occurredAt: new Date().toISOString(),
-        title: retryable ? 'Partial score. Retry required.' : 'Partial score. Input rejected.',
+        title: retryable ? 'Partial score. Retry required.' : 'Partial score. Manual resolution required.',
       });
       if (!retryable) {
-        newMatchId(true);
+        const manualReceipt: PendingReceipt = { resolution: 'manual', submission };
+        savePendingReceipt(manualReceipt);
+        pendingReceipt.value = manualReceipt;
       }
     } else {
       const replayed = result.status === 'replayed';
@@ -225,7 +256,8 @@ async function recordMatch(): Promise<void> {
         occurredAt: new Date().toISOString(),
         title: replayed ? 'Already recorded' : 'Score locked',
       });
-      newMatchId(true);
+      releasePendingReceipt();
+      newMatchId();
     }
     await loadLeaderboard(true);
   } catch (error) {
@@ -248,13 +280,16 @@ async function recordMatch(): Promise<void> {
 let stopListening: (() => void) | undefined;
 
 onMounted(async () => {
-  if (pendingRetry.value !== null) {
+  if (pendingReceipt.value !== null) {
+    const { resolution, submission } = pendingReceipt.value;
     addActivity({
-      detail: `Recovered receipt ${pendingRetry.value.matchId}. Retry it unchanged to resolve its previous delivery.`,
-      id: `recovered-${pendingRetry.value.matchId}`,
+      detail: resolution === 'manual'
+        ? `Recovered receipt ${submission.matchId}. It remains locked for manual resolution.`
+        : `Recovered receipt ${submission.matchId}. Retry it unchanged to resolve its previous delivery.`,
+      id: `recovered-${submission.matchId}`,
       kind: 'notice',
       occurredAt: new Date().toISOString(),
-      title: 'Unfinished receipt restored',
+      title: resolution === 'manual' ? 'Manual resolution required' : 'Unfinished receipt restored',
     });
   }
   await loadLeaderboard();
@@ -345,7 +380,8 @@ onBeforeUnmount(() => stopListening?.());
               <input v-model="form.matchId" :readonly="isRetryLocked" autocomplete="off" required maxlength="64">
               <button type="button" class="inline-button" :disabled="isRetryLocked" @click="newMatchId()">New</button>
             </div>
-            <small v-if="isRetryLocked">This unresolved receipt is locked to preserve a safe retry.</small>
+            <small v-if="requiresManualResolution">Manual resolution is required. Do not resend this receipt or create a new ID.</small>
+            <small v-else-if="isRetryLocked">This unresolved receipt is locked to preserve a safe retry.</small>
             <small v-else>Reuse this exact ID to retry safely.</small>
           </label>
 
@@ -368,8 +404,8 @@ onBeforeUnmount(() => stopListening?.());
           <p v-if="errorMessage" class="form-message form-message--error" role="alert">{{ errorMessage }}</p>
           <p v-else-if="successMessage" class="form-message form-message--success" aria-live="polite">{{ successMessage }}</p>
 
-          <button class="send-button" type="submit" :disabled="isSubmitting">
-            <span>{{ isSubmitting ? 'Sending to ledger…' : 'Send result' }}</span>
+          <button class="send-button" type="submit" :disabled="isSubmitting || requiresManualResolution">
+            <span>{{ isSubmitting ? 'Sending to ledger…' : requiresManualResolution ? 'Manual resolution required' : 'Send result' }}</span>
             <span aria-hidden="true">↗</span>
           </button>
         </form>

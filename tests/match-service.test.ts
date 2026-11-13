@@ -127,7 +127,7 @@ test('reports a partial result honestly when the second score cannot be recorded
   assert.match(receipt.message ?? '', /Retry this exact match ID/);
 });
 
-test('does not recommend a retry when the remaining score conflicts', async () => {
+test('requires manual resolution when the remaining score conflicts', async () => {
   const ledger = new RecordingLedger();
   ledger.recordScore = async (event: ScoreEventRequest) => {
     ledger.events.push(event);
@@ -147,5 +147,7 @@ test('does not recommend a retry when the remaining score conflicts', async () =
 
   assert.equal(receipt.status, 'partial');
   assert.equal(receipt.retryable, false);
-  assert.match(receipt.message ?? '', /use a new match ID/);
+  assert.equal(receipt.scoreEvents.length, 1);
+  assert.match(receipt.message ?? '', /manual resolution/i);
+  assert.doesNotMatch(receipt.message ?? '', /use a new match ID/i);
 });

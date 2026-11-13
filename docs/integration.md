@@ -69,7 +69,8 @@ The dashboard retains an unresolved receipt in session storage before sending it
 so a browser refresh does not discard the timestamp required for a safe retry.
 It locks an ambiguous receipt until it is resolved; operators cannot silently
 replace a network-uncertain submission with a new idempotency key. A known local
-validation failure or upstream 4xx rejection unlocks the form for correction.
+validation failure or upstream 4xx rejection before any score event is accepted
+unlocks the form for correction.
 
 ### Retry rule
 
@@ -80,9 +81,11 @@ correction deserves a new match ID and an explicit compensating score event.
 
 When only one of the two score events is accepted, the gateway labels the result
 `partial`. Network failures, timeouts, 408s, 429s, and 5xx responses are
-retryable with the same stable receipt. A 4xx validation or conflict response is
-not: correct the input and create a new match ID instead of endlessly retrying a
-conflicting command.
+retryable with the same stable receipt. A 4xx validation or conflict response
+after one score event was accepted requires manual resolution. The dashboard
+keeps the receipt locked, blocks resubmission, and never creates a new match ID.
+Any correction or compensating score must be handled explicitly outside the
+dashboard after checking the ledger.
 
 ## Receive a webhook
 

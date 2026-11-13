@@ -43,7 +43,7 @@ export class MatchService {
           retryable,
           message: retryable
             ? 'One score event was accepted. Retry this exact match ID to finish safely.'
-            : 'One score event was accepted, but the remaining event was rejected. Correct the input and use a new match ID.',
+            : 'One score event was accepted, but the remaining event was rejected. The receipt is locked and needs manual resolution. Do not retry or create a new match ID.',
         };
       }
     }
